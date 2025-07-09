@@ -1,0 +1,180 @@
+%sql
+SELECT * FROM `workspace`.`hlo`.`book_2`;
+
+RawtableName 	RawtableCol 	DataType
+user	user_id	string
+user	user_name	string
+*****************************************************************************
+print(_sqldf.columns)
+
+['RawtableName ', 'RawtableCol ', 'DataType']
+******************************************************************************
+schema_info = _sqldf.collect()
+
+columns = []
+for row in schema_info:
+    row_dict = row.asDict()
+    
+    
+    col_name = row_dict['RawtableCol ']  
+    col_type = row_dict['DataType']
+    
+    columns.append(f"{col_name} {col_type.upper()}")
+
+columns_str = ", ".join(columns)
+print("Generated column definitions:", columns_str)
+
+create_query = f"""
+CREATE TABLE IF NOT EXISTS hlo.user_table (
+    {columns_str}
+)
+"""
+
+print("Final CREATE TABLE query:\n", create_query)
+
+spark.sql(create_query)
+
+Generated column definitions: user_id STRING, user_name STRING
+Final CREATE TABLE query:
+ 
+CREATE TABLE IF NOT EXISTS hlo.user_table (
+    user_id STRING, user_name STRING
+)
+
+DataFrame[]
+*****************************************************************************************
+spark.sql("SHOW TABLES IN hlo").show()
+
+--------+----------+-----------+
+|database| tableName|isTemporary|
++--------+----------+-----------+
+|     hlo|    book_2|      false|
+|     hlo|user_table|      false|
+|        |    _sqldf|       true|
++--------+----------+-----------+
+********************************************************************************************
+spark.sql("desc hlo.user_table").show()
+
++---------+---------+-------+
+| col_name|data_type|comment|
++---------+---------+-------+
+|  user_id|   string|   NULL|
+|user_name|   string|   NULL|
++---------+---------+-------+
+*************************************************************************************************************************************************************************************
+%sql
+SELECT * FROM `workspace`.`hlo`.`book_4`;
+
+RawtableName 	RawtableCol 	RawTableColDataType	CuratedTableName	CuratedTableCol	CuratedTableDataType	ServiceTableName	ServiceTableCol	ServiceTableDataType
+user	user_id	string	Employee	emp_id	string	Emp	emp_id	string
+user	user_name	string	Employee	emp_name	string	Emp	emp_name	string
+***************************************************************************************************************************************************************************************
+df4 = spark.table("hlo.book_4")
+df4.display()
+*******************************************************************************************************
+data = df4.collect()
+
+curated_tables = {}
+service_tables = {}
+
+for row in data:
+    row_dict = row.asDict()
+    
+    curated_table = row_dict['CuratedTableName']
+    curated_col = row_dict['CuratedTableCol']
+    curated_type = row_dict['CuratedTableDataType']
+    
+    service_table = row_dict['ServiceTableName']
+    service_col = row_dict['ServiceTableCol']
+    service_type = row_dict['ServiceTableDataType']
+    
+    if curated_table not in curated_tables:
+        curated_tables[curated_table] = []
+    curated_tables[curated_table].append(f"{curated_col} {curated_type.upper()}")
+    
+    if service_table not in service_tables:
+        service_tables[service_table] = []
+    service_tables[service_table].append(f"{service_col} {service_type.upper()}")
+
+
+def create_or_replace_tables(table_dict, layer):
+    for table_name, columns in table_dict.items():
+        full_table_name = f"{layer}.{table_name}"
+        columns_str = ", ".join(columns)
+
+        
+        if spark.catalog.tableExists(full_table_name):
+            print(f"🔁 Table exists. Dropping: {full_table_name}")
+            spark.sql(f"DROP TABLE {full_table_name}")
+        else:
+            print(f"🆕 Creating new table: {full_table_name}")
+
+        # Create new table
+        create_query = f"""
+        CREATE TABLE {full_table_name} (
+            {columns_str}
+        )
+        """
+        print(create_query)
+        spark.sql(create_query)
+
+
+spark.sql("CREATE DATABASE IF NOT EXISTS Curated")
+spark.sql("CREATE DATABASE IF NOT EXISTS Service")
+
+
+create_or_replace_tables(curated_tables, "Curated")
+create_or_replace_tables(service_tables, "Service")
+
+Table exists. Dropping: Curated.Employee
+
+        CREATE TABLE Curated.Employee (
+            emp_id STRING, emp_name STRING
+        )
+        
+Table exists. Dropping: Service.Emp
+
+        CREATE TABLE Service.Emp (
+            emp_id STRING, emp_name STRING
+        )
+***********************************************************************************
+spark.sql("SHOW TABLES IN Curated").show()
+spark.sql("SHOW TABLES IN Service").show()
+
++--------+---------+-----------+
+|database|tableName|isTemporary|
++--------+---------+-----------+
+| curated| employee|      false|
+|        |   _sqldf|       true|
++--------+---------+-----------+
+
++--------+---------+-----------+
+|database|tableName|isTemporary|
++--------+---------+-----------+
+| service|      emp|      false|
+|        |   _sqldf|       true|
++--------+---------+-----------+
+***********************************************************************************
+spark.sql("desc Curated.employee").show()
+
+10:48 PM (1s)
+14
+14
+spark.sql("desc Curated.employee").show()
+
++--------+---------+-------+
+|col_name|data_type|comment|
++--------+---------+-------+
+|  emp_id|   string|   NULL|
+|emp_name|   string|   NULL|
++--------+---------+-------+
+************************************************************************************
+spark.sql("desc Service.emp").show()
+
++--------+---------+-------+
+|col_name|data_type|comment|
++--------+---------+-------+
+|  emp_id|   string|   NULL|
+|emp_name|   string|   NULL|
++--------+---------+-------+
+************************************************************************************
